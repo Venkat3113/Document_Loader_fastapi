@@ -29,30 +29,33 @@ def get_loader(file_path: str, file_type: str):
         raise ValueError("Unsupported file type")
 
 # -------------------------------
-# API Endpoint
+# 1. Health Check (Public API)
 # -------------------------------
-@app.post("/upload/")
+@app.get("/health")
+def health_check():
+    return {"status": "running"}
+
+# -------------------------------
+# 2. Upload & Chunk (Main API)
+# -------------------------------
+@app.post("/upload")
 async def upload_file(file: UploadFile = File(...)):
     try:
-        # Create temp file
         file_ext = file.filename.split(".")[-1].lower()
         temp_filename = f"temp_{uuid.uuid4()}.{file_ext}"
 
         with open(temp_filename, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        # Load document
         loader = get_loader(temp_filename, file_ext)
         documents = loader.load()
 
-        # Split into chunks
         splitter = RecursiveCharacterTextSplitter(
             chunk_size=500,
             chunk_overlap=50
         )
         chunks = splitter.split_documents(documents)
 
-        # Prepare JSON output
         output = []
         for i, chunk in enumerate(chunks):
             output.append({
@@ -61,7 +64,6 @@ async def upload_file(file: UploadFile = File(...)):
                 "metadata": chunk.metadata
             })
 
-        # Cleanup
         os.remove(temp_filename)
 
         return JSONResponse(content={
@@ -71,3 +73,27 @@ async def upload_file(file: UploadFile = File(...)):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# -------------------------------
+# 3. Dummy Predict API (for rate limit testing)
+# -------------------------------
+@app.get("/predict")
+def predict():
+    return {"prediction": "This is a dummy prediction"}
+
+# -------------------------------
+# 4. Heavy API (simulate load)
+# -------------------------------
+@app.get("/heavy")
+def heavy_operation():
+    data = []
+    for i in range(10000):
+        data.append(i*i)
+    return {"message": "Heavy operation done", "size": len(data)}
+
+# -------------------------------
+# 5. Admin API (to secure later)
+# -------------------------------
+@app.get("/admin")
+def admin_panel():
+    return {"message": "Sensitive admin data"}
